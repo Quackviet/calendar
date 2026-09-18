@@ -11,6 +11,15 @@ const firebaseApp = initializeApp({
 });
 const auth = getAuth(firebaseApp), db = getFirestore(firebaseApp), provider = new GoogleAuthProvider();
 let cloudUser = null, loadingCloud = false;
+const offlineGate = document.createElement('div');
+offlineGate.className = 'offline-gate hidden';
+offlineGate.innerHTML = '<div><span>📶</span><h1>Cần kết nối Internet</h1><p>Hãy kết nối Wi‑Fi hoặc Internet để tiếp tục dùng lịch.</p><button type="button">Thử lại</button></div>';
+document.body.append(offlineGate);
+function updateConnectionGate() { offlineGate.classList.toggle('hidden', navigator.onLine); }
+window.addEventListener('online', updateConnectionGate);
+window.addEventListener('offline', updateConnectionGate);
+offlineGate.querySelector('button').onclick = updateConnectionGate;
+updateConnectionGate();
 const nowDate = new Date();
 const STORAGE_KEYS = { events: 'my-calendar-events-v1', schedule: 'my-calendar-schedule-v1', app: 'my-calendar-app-v1' };
 function readSavedData(key, fallback = []) {
@@ -26,6 +35,12 @@ function readSavedObject(key, fallback) {
   try { return { ...fallback, ...(JSON.parse(localStorage.getItem(key)) || {}) }; } catch { return fallback; }
 }
 const state = readSavedObject(STORAGE_KEYS.app, { year: nowDate.getFullYear(), month: nowDate.getMonth(), day: nowDate.getDate(), view: 'month' });
+const todayLabel = document.createElement('p');
+todayLabel.id = 'today-label';
+todayLabel.className = 'today-label';
+todayLabel.style.cssText = 'margin:0;color:#243047;font-size:22px;font-weight:900;letter-spacing:-.35px;line-height:1.25';
+document.querySelector('.topbar .eyebrow').after(todayLabel);
+document.querySelector('.topbar h1').style.display = 'none';
 function saveAppState() { saveData(STORAGE_KEYS.app, state); }
 let events = readSavedData(STORAGE_KEYS.events);
 let activeArea = 'calendar';
@@ -81,9 +96,30 @@ const colors = ['mint', 'pink', 'purple'],
   dayView = document.querySelector('#day-view'),
   agenda = document.querySelector('#agenda-view'),
   dialog = document.querySelector('#event-dialog');
+const startDateInput = document.querySelector('#event-date'),
+  startTimeInput = document.querySelector('#event-time');
+startDateInput.closest('label').firstChild.nodeValue = 'Ngày bắt đầu';
+startTimeInput.closest('label').firstChild.nodeValue = 'Giờ bắt đầu';
+startTimeInput.closest('label').insertAdjacentHTML(
+  'afterend',
+  '<label>Ngày kết thúc<input id="event-end-date" type="date" required></label><label>Giờ kết thúc<input id="event-end-time" type="time" value="10:00" required></label>'
+);
+const endDateInput = document.querySelector('#event-end-date'),
+  endTimeInput = document.querySelector('#event-end-time');
 const addButton = document.querySelector('#add-event'),
   filterButton = document.querySelector('#filter-button'),
   headerActions = document.createElement('div');
+const quickDatePicker = document.createElement('div');
+quickDatePicker.className = 'quick-date-picker';
+quickDatePicker.innerHTML = '<label>Chọn nhanh ngày<input id="quick-date" type="date" aria-label="Chọn nhanh ngày"></label><button type="button" id="go-today">Hôm nay</button>';
+quickDatePicker.style.cssText = 'display:flex;align-items:end;gap:8px;margin:0 2px 11px;padding:8px 9px;border-radius:12px;background:#f7faf9;border:1px solid #e2eee9';
+quickDatePicker.querySelector('label').style.cssText = 'display:grid;gap:3px;flex:1;color:#718092;font-size:9px;font-weight:800';
+quickDatePicker.querySelector('input').style.cssText = 'width:100%;border:0;background:transparent;color:#243047;font:800 12px Nunito,Arial,sans-serif;outline:0';
+quickDatePicker.querySelector('button').style.cssText = 'padding:8px 10px;border-radius:9px;background:#55d0aa;color:#fff;font:800 10px Nunito,Arial,sans-serif;white-space:nowrap';
+document.querySelector('.calendar-header').before(quickDatePicker);
+const quickDateInput = quickDatePicker.querySelector('#quick-date');
+quickDateInput.onchange = () => { if (quickDateInput.value) select(quickDateInput.value); };
+quickDatePicker.querySelector('#go-today').onclick = () => select(`${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}`);
 headerActions.className = 'header-actions';
 filterButton.before(headerActions);
 headerActions.append(addButton, filterButton);
@@ -110,11 +146,6 @@ const scheduleView = document.createElement('section');
 scheduleView.id = 'schedule-view';
 scheduleView.className = 'schedule-view hidden';
 document.querySelector('#agenda-view').after(scheduleView);
-const scanDialog = document.createElement('dialog');
-scanDialog.className = 'scan-dialog';
-scanDialog.innerHTML = `<section><button type="button" class="scan-close" aria-label="Đóng">×</button><p class="eyebrow">QUÉT THỜI KHÓA BIỂU</p><h2>Đọc môn học từ ảnh</h2><p class="scan-note">Ảnh chỉ được xử lý trong trình duyệt của bạn. Hãy chụp rõ toàn bộ bảng thời khóa biểu.</p><label class="scan-upload">📷 Chọn ảnh<input id="schedule-image" type="file" accept="image/*"></label><img id="schedule-preview" class="hidden" alt="Ảnh thời khóa biểu đã chọn"><p id="scan-status" class="scan-status"></p><div id="scan-result" class="scan-result hidden"></div><button type="button" id="apply-scan" class="scan-apply hidden">Áp dụng vào thời khóa biểu</button></section>`;
-document.body.append(scanDialog);
-let scannedEntries = [];
 const scheduleEntries = readSavedData(STORAGE_KEYS.schedule);
 let cloudSaveTimer;
 function queueCloudSave() {
@@ -128,61 +159,56 @@ function queueCloudSave() {
     }
   }, 350);
 }
-const scheduleDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-function loadOcr() {
-  if (window.Tesseract) return Promise.resolve(window.Tesseract);
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    script.onload = () => resolve(window.Tesseract);
-    script.onerror = () => reject(new Error('Không tải được công cụ OCR'));
-    document.head.append(script);
-  });
-}
-function isScheduleLabel(text) {
-  return /^(thu|thứ|sang|sáng|chieu|chiều|tiet|tiết|mon|môn|monday|tuesday|wednesday|thursday|friday|saturday|[1-7])$/i.test(text.trim());
-}
-function mapOcrToSchedule(lines, width, height) {
-  const content = lines.filter(line => line.text.trim().length > 1 && !isScheduleLabel(line.text));
-  return content.map(line => {
-    const centerX = line.bbox.x0 + (line.bbox.x1 - line.bbox.x0) / 2;
-    const centerY = line.bbox.y0 + (line.bbox.y1 - line.bbox.y0) / 2;
-    const dayIndex = Math.max(0, Math.min(5, Math.floor((centerX / width) * 6)));
-    const rowIndex = Math.max(0, Math.min(7, Math.floor((centerY / height) * 8)));
-    return { day: scheduleDays[dayIndex], session: rowIndex < 4 ? 'morning' : 'afternoon', period: (rowIndex % 4) + 1, subject: line.text.trim() };
-  });
-}
-async function scanScheduleFile(file) {
-  const preview = document.querySelector('#schedule-preview'), status = document.querySelector('#scan-status'), result = document.querySelector('#scan-result'), apply = document.querySelector('#apply-scan');
-  preview.src = URL.createObjectURL(file); preview.classList.remove('hidden'); result.classList.add('hidden'); apply.classList.add('hidden'); status.textContent = 'Đang đọc ảnh…';
-  try {
-    const Tesseract = await loadOcr();
-    const { data } = await Tesseract.recognize(file, 'vie+eng', { logger: message => { if (message.status === 'recognizing text') status.textContent = `Đang dò chữ… ${Math.round(message.progress * 100)}%`; } });
-    scannedEntries = mapOcrToSchedule(data.lines || [], data.width || preview.naturalWidth, data.height || preview.naturalHeight);
-    status.textContent = scannedEntries.length ? `Đã tìm thấy ${scannedEntries.length} mục. Kiểm tra trước khi áp dụng.` : 'Chưa đọc được môn học rõ ràng. Hãy thử ảnh sáng hơn, chụp thẳng bảng.';
-    result.innerHTML = scannedEntries.map(entry => `<p><b>${entry.day} · ${entry.session === 'morning' ? 'Sáng' : 'Chiều'} · Tiết ${entry.period}</b>${safe(entry.subject)}</p>`).join('');
-    result.classList.toggle('hidden', !scannedEntries.length); apply.classList.toggle('hidden', !scannedEntries.length);
-  } catch (error) { status.textContent = 'Không thể quét ảnh. Hãy kiểm tra kết nối mạng rồi thử lại.'; console.warn(error); }
-}
-document.querySelector('.scan-close').onclick = () => scanDialog.close();
-document.querySelector('#schedule-image').onchange = event => { if (event.target.files[0]) scanScheduleFile(event.target.files[0]); };
-document.querySelector('#apply-scan').onclick = () => { scannedEntries.forEach(entry => { const old = scheduleEntries.find(item => item.day === entry.day && item.session === entry.session && item.period === entry.period); if (old) old.subject = entry.subject; else scheduleEntries.push(entry); }); saveData(STORAGE_KEYS.schedule, scheduleEntries); scanDialog.close(); renderSchedule(); };
+const scheduleDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'];
 function renderSchedule() {
   const cell = (day, session, period) => {
     const entry = scheduleEntries.find(item => item.day === day && item.session === session && item.period === period);
-    return `<div class="schedule-cell ${entry ? 'filled' : ''}" title="${entry ? safe(entry.subject) : 'Trống'}">${entry ? safe(entry.subject) : ''}</div>`;
+    return `<div class="schedule-cell ${entry ? 'filled' : ''}" role="button" tabindex="0" data-schedule-day="${day}" data-schedule-session="${session}" data-schedule-period="${period}" title="Chạm để nhập hoặc sửa môn học">${entry ? safe(entry.subject) : ''}</div>`;
   };
-  scheduleView.innerHTML = `<div class="schedule-title"><button id="close-schedule" aria-label="Đóng thời khóa biểu">‹</button><div><p class="eyebrow">LỊCH CÁ NHÂN</p><h2>Thời khóa biểu</h2></div><button id="scan-schedule" class="scan-button" type="button">📷 Quét ảnh</button></div><section class="schedule-card"><div class="schedule-table"><div class="schedule-corner"></div>${scheduleDays.map((day, index) => `<div class="schedule-day day-${index + 2}">${day}</div>`).join('')}<div class="session-label morning">Sáng</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'morning', period))).join('')}<div class="session-label afternoon">Chiều</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'afternoon', period))).join('')}</div></section><form class="schedule-form" id="schedule-form"><label>Thứ<select id="schedule-day">${scheduleDays.map(day => `<option>${day}</option>`).join('')}</select></label><label>Buổi<select id="schedule-session"><option value="morning">Sáng</option><option value="afternoon">Chiều</option></select></label><label>Tiết<select id="schedule-period"><option value="1">Tiết 1</option><option value="2">Tiết 2</option><option value="3">Tiết 3</option><option value="4">Tiết 4</option></select></label><label class="subject-field">Môn học / công việc<input id="schedule-subject" placeholder="Ví dụ: Toán, Họp nhóm" required></label><button type="submit">Thêm vào bảng</button></form><p class="schedule-hint">Chọn thông tin rồi thêm vào ô tương ứng trong thời khóa biểu.</p>`;
+  scheduleView.innerHTML = `<div class="schedule-title"><button id="close-schedule" aria-label="Đóng thời khóa biểu">‹</button><div><p class="eyebrow">LỊCH CÁ NHÂN</p><h2>Thời khóa biểu</h2></div></div><section class="schedule-card"><div class="schedule-table"><div class="schedule-corner"></div>${scheduleDays.map((day, index) => `<div class="schedule-day day-${index + 2}">${day}</div>`).join('')}<div class="session-label morning">Sáng</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'morning', period))).join('')}<div class="session-label afternoon">Chiều</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'afternoon', period))).join('')}</div></section><form class="schedule-form" id="schedule-form"><label>Thứ<select id="schedule-day">${scheduleDays.map(day => `<option>${day}</option>`).join('')}</select></label><label>Buổi<select id="schedule-session"><option value="morning">Sáng</option><option value="afternoon">Chiều</option></select></label><label>Tiết<select id="schedule-period"><option value="1">Tiết 1</option><option value="2">Tiết 2</option><option value="3">Tiết 3</option><option value="4">Tiết 4</option></select></label><label class="subject-field">Môn học / công việc<input id="schedule-subject" placeholder="Ví dụ: Toán, Họp nhóm" required></label><button type="submit">Thêm vào bảng</button></form><p class="schedule-hint">Chọn thông tin rồi thêm vào ô tương ứng trong thời khóa biểu.</p>`;
+  const scheduleTable = scheduleView.querySelector('.schedule-table');
+  scheduleTable.style.gridTemplateColumns = '47px repeat(5, minmax(0, 1fr))';
+  scheduleTable.style.gridTemplateRows = '29px repeat(8, 34px)';
+  scheduleView.querySelector('#schedule-form').remove();
+  scheduleView.querySelector('.schedule-hint').remove();
   scheduleView.querySelector('#close-schedule').onclick = closeSchedule;
-  scheduleView.querySelector('#scan-schedule').onclick = () => scanDialog.showModal();
-  scheduleView.querySelector('#schedule-form').onsubmit = event => {
-    event.preventDefault();
-    const day = scheduleView.querySelector('#schedule-day').value, session = scheduleView.querySelector('#schedule-session').value, period = Number(scheduleView.querySelector('#schedule-period').value), subject = scheduleView.querySelector('#schedule-subject').value.trim();
-    const old = scheduleEntries.find(item => item.day === day && item.session === session && item.period === period);
-    if (old) old.subject = subject; else scheduleEntries.push({ day, session, period, subject });
-    saveData(STORAGE_KEYS.schedule, scheduleEntries);
-    renderSchedule();
-  };
+  scheduleView.querySelectorAll('[data-schedule-day]').forEach(cellElement => {
+    const beginEdit = () => {
+      if (cellElement.querySelector('input')) return;
+      const day = cellElement.dataset.scheduleDay,
+        session = cellElement.dataset.scheduleSession,
+        period = Number(cellElement.dataset.schedulePeriod),
+        old = scheduleEntries.find(item => item.day === day && item.session === session && item.period === period),
+        input = document.createElement('input');
+      input.type = 'text';
+      input.value = old?.subject || '';
+      input.placeholder = 'Nhập môn';
+      input.setAttribute('aria-label', `Nhập môn học ${day}, ${session}, tiết ${period}`);
+      input.style.cssText = 'width:100%;height:100%;padding:2px;border:0;border-radius:4px;background:#fff8eb;color:#73564a;text-align:center;font:800 8px Nunito,Arial,sans-serif;outline:2px solid #e68a52';
+      cellElement.replaceChildren(input);
+      input.focus();
+      input.select();
+      let committed = false;
+      const saveCell = () => {
+        if (committed) return;
+        committed = true;
+        const subject = input.value.trim(), index = scheduleEntries.indexOf(old);
+        if (subject) {
+          if (old) old.subject = subject;
+          else scheduleEntries.push({ day, session, period, subject });
+        } else if (index >= 0) scheduleEntries.splice(index, 1);
+        saveData(STORAGE_KEYS.schedule, scheduleEntries);
+        renderSchedule();
+      };
+      input.onkeydown = event => {
+        if (event.key === 'Enter') saveCell();
+        if (event.key === 'Escape') { committed = true; renderSchedule(); }
+      };
+      input.onblur = saveCell;
+    };
+    cellElement.onclick = beginEdit;
+    cellElement.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); beginEdit(); } };
+  });
 }
 function resetThemeToHome() {
   activeArea = 'calendar';
@@ -284,8 +310,16 @@ function emoji(title, desc) {
 }
 
 const areaOf = event => event.area || 'calendar';
-const forDate = date => events.filter(event => event.date === date && areaOf(event) === activeArea).sort((a, b) => a.time.localeCompare(b.time));
-const allForDate = date => events.filter(event => event.date === date).sort((a, b) => a.time.localeCompare(b.time));
+const endDateOf = event => event.endDate || event.date;
+const endTimeOf = event => event.endTime || event.time;
+const happensOn = (event, date) => event.date <= date && endDateOf(event) >= date;
+const forDate = date => events.filter(event => happensOn(event, date) && areaOf(event) === activeArea).sort((a, b) => a.time.localeCompare(b.time));
+const allForDate = date => events.filter(event => happensOn(event, date)).sort((a, b) => a.time.localeCompare(b.time));
+function timeRange(event) {
+  const start = `${event.time} · ${pad(Number(event.date.slice(8)))}/${pad(Number(event.date.slice(5, 7)))}/${event.date.slice(0, 4)}`;
+  const end = `${endTimeOf(event)} · ${pad(Number(endDateOf(event).slice(8)))}/${pad(Number(endDateOf(event).slice(5, 7)))}/${endDateOf(event).slice(0, 4)}`;
+  return `${start} → ${end}`;
+}
 function conflictsForDate(date) {
   const slots = new Map();
   events.filter(event => event.date === date).forEach(event => {
@@ -310,7 +344,7 @@ function eventCards(list) {
           e =>
             `<article class="event"><time class="event-time">${e.time}</time><span class="event-bar ${e.color}"></span><div><h3>${safe(
               e.title
-            )}</h3><p>${safe(e.description || 'Không có mô tả.')}</p></div><span class="event-icon">${e.icon}</span><button class="delete-event" type="button" data-delete-index="${events.indexOf(e)}" aria-label="Xóa ${safe(e.title)}">×</button></article>`
+            )}</h3><p>${timeRange(e)}<br>${safe(e.description || 'Không có mô tả.')}</p></div><span class="event-icon">${e.icon}</span><button class="delete-event" type="button" data-delete-index="${events.indexOf(e)}" aria-label="Xóa ${safe(e.title)}">×</button></article>`
         )
         .join('')
     : '<p class="empty">Chưa có công việc nào. Nhấn dấu + để thêm.</p>';
@@ -330,6 +364,8 @@ function bindDeleteButtons() {
 function renderCalendar() {
   document.querySelector('#calendar-title').textContent = `${months[state.month]}, ${state.year}`;
   document.querySelector('h1').textContent = `${months[state.month].replace('THÁNG', 'Tháng')}, ${state.year}`;
+  todayLabel.textContent = `${weekdays[nowDate.getDay()]}, ngày ${pad(nowDate.getDate())}/${pad(nowDate.getMonth() + 1)}/${nowDate.getFullYear()}`;
+  quickDateInput.value = `${state.year}-${pad(state.month + 1)}-${pad(state.day)}`;
   const leading = (new Date(state.year, state.month, 1).getDay() + 6) % 7,
     total = new Date(state.year, state.month + 1, 0).getDate(),
     prev = new Date(state.year, state.month, 0).getDate();
@@ -341,7 +377,8 @@ function renderCalendar() {
       key = inMonth ? `${state.year}-${pad(state.month + 1)}-${pad(day)}` : '',
       items = inMonth ? forDate(key) : [],
       button = document.createElement('button');
-    button.className = `date ${inMonth ? '' : 'muted'} ${inMonth && day === state.day ? 'selected' : ''} ${inMonth && conflictsForDate(key) ? 'time-conflict' : ''}`;
+    const isToday = inMonth && state.year === nowDate.getFullYear() && state.month === nowDate.getMonth() && day === nowDate.getDate();
+    button.className = `date ${inMonth ? '' : 'muted'} ${inMonth && day === state.day ? 'selected' : ''} ${isToday ? 'today' : ''} ${inMonth && conflictsForDate(key) ? 'time-conflict' : ''}`;
     button.innerHTML = `<span>${shown}</span><i class="event-markers">${items
       .slice(0, 3)
       .map(e => `<b class="${e.color}"></b>`)
@@ -413,14 +450,14 @@ function renderDay() {
   const items = forDate(dateKey()),
     hours = Array.from({ length: 13 }, (_, i) => i + 8),
     rows = hours
-      .map(h => {
-        const matches = items.filter(e => Number(e.time.slice(0, 2)) === h);
-        return `<div class="timeline-row"><time>${pad(h)}:00</time><div class="timeline-slot">${matches
+      .map(hour => {
+        const matches = items.filter(event => Number(event.time.slice(0, 2)) === hour);
+        return `<div class="timeline-row"><time>${pad(hour)}:00</time><div class="timeline-slot">${matches
           .map(
-            e =>
-              `<article class="timeline-event ${e.color}"><span>${e.time}</span><strong>${e.icon} ${safe(e.title)}</strong><small>${safe(
-                e.description || 'Không có mô tả.'
-              )}</small></article>`
+            event =>
+              `<article class="timeline-event ${event.color}"><span>${event.time} → ${endTimeOf(event)}</span><strong>${event.icon} ${safe(
+                event.title
+              )}</strong><small>${safe(event.description || 'Không có mô tả.')}</small></article>`
           )
           .join('')}</div></div>`;
       })
@@ -432,7 +469,7 @@ function renderDay() {
 
 function statusOf(event) {
   if (event.done) return 'completed';
-  return new Date(`${event.date}T${event.time}`) < new Date() ? 'overdue' : 'pending';
+  return new Date(`${endDateOf(event)}T${endTimeOf(event)}`) < new Date() ? 'overdue' : 'pending';
 }
 
 function dailyList(title, items, status) {
@@ -651,19 +688,28 @@ document.querySelector('#next').onclick = () => {
   renderAll();
 };
 addButton.onclick = () => {
-  document.querySelector('#event-date').value = dateKey();
+  startDateInput.value = dateKey();
+  endDateInput.value = dateKey();
+  startTimeInput.value = '09:00';
+  endTimeInput.value = '10:00';
   dialog.showModal();
 };
 document.querySelector('#close-dialog').onclick = () => dialog.close();
 document.querySelector('#event-form').onsubmit = e => {
   e.preventDefault();
   const title = document.querySelector('#event-name').value.trim(),
-    date = document.querySelector('#event-date').value,
-    time = document.querySelector('#event-time').value,
+    date = startDateInput.value,
+    time = startTimeInput.value,
+    endDate = endDateInput.value,
+    endTime = endTimeInput.value,
     description = document.querySelector('#event-description').value.trim();
-  if (!title || !date || !time) return;
+  if (!title || !date || !time || !endDate || !endTime) return;
+  if (new Date(`${endDate}T${endTime}`) < new Date(`${date}T${time}`)) {
+    alert('Thời điểm kết thúc phải sau thời điểm bắt đầu.');
+    return;
+  }
   const conflictingEvent = events.find(event => event.date === date && event.time === time && areaOf(event) !== activeArea);
-  events.push({ title, date, time, description, area: activeArea, icon: emoji(title, description), color: colors[events.length % colors.length] });
+  events.push({ title, date, time, endDate, endTime, description, area: activeArea, icon: emoji(title, description), color: colors[events.length % colors.length] });
   saveData(STORAGE_KEYS.events, events);
   if (conflictingEvent) showConflict(areaOf(conflictingEvent));
   dialog.close();
