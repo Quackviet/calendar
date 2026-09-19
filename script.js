@@ -313,6 +313,12 @@ const utilityView = document.createElement('section');
 utilityView.id = 'utility-view';
 utilityView.className = 'utility-view hidden';
 agenda.after(utilityView);
+utilityView.addEventListener('click', event => {
+  if (!event.target.closest('#diary-back')) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  renderUtility('diary');
+});
 const allTasksNav = document.createElement('button');
 allTasksNav.className = 'nav-item';
 allTasksNav.innerHTML = '<span>☷</span>Danh sách';
@@ -649,26 +655,26 @@ function renderUtility(kind) {
     const showList = (search = '', date = '') => {
       const ordered = saved.map((item, index) => ({ item, index })).sort((a, b) => new Date(a.item.date) - new Date(b.item.date));
       const filtered = ordered.filter(({ item }) => item.title.toLowerCase().includes(search.toLowerCase()) && (!date || String(item.date).slice(0, 10) === date));
-      utilityView.innerHTML = `<section class="diary-page"><div class="utility-heading"><p class="eyebrow">KHÔNG GIAN RIÊNG</p><h2>Nhật kí</h2></div><button class="diary-add" id="diary-add">＋ Thêm nhật kí</button><div class="diary-filters"><label>Ngày / tháng / năm<input id="diary-filter-date" type="date" value="${date}"></label><label>Tìm kiếm nhật kí<input id="diary-search" type="search" value="${safe(search)}" placeholder="Tìm kiếm nhật kí..."></label></div><div class="diary-saved">${filtered.length ? filtered.map(({ item, index }) => `<button class="diary-entry" data-diary-entry="${index}"><small>${new Date(item.date).toLocaleDateString('vi-VN')}</small><strong>${safe(item.title)}</strong></button>`).join('') : '<p class="empty">Không tìm thấy nhật kí phù hợp.</p>'}</div></section>`;
+      utilityView.innerHTML = `<section class="diary-page"><div class="utility-heading"><p class="eyebrow">KHÔNG GIAN RIÊNG</p><h2>Nhật kí</h2></div><button class="diary-add" id="diary-add">＋ Thêm nhật kí</button><h3 class="diary-search-heading">Tìm kiếm nhật kí</h3><div class="diary-filters"><label>Ngày / tháng / năm<input id="diary-filter-date" type="date" value="${date}"></label><label class="diary-search-field"><span>Tìm theo tên</span><input id="diary-search" type="search" value="${safe(search)}" placeholder="Tìm kiếm nhật kí..."></label></div><div class="diary-saved">${filtered.length ? filtered.map(({ item, index }) => `<button class="diary-entry" data-diary-entry="${index}"><span class="diary-entry-emoji">${item.icon || journalEmoji(item.title, item.content || '')}</span><div><small>${new Date(item.date).toLocaleDateString('vi-VN')}</small><strong>${safe(item.title)}</strong></div></button>`).join('') : '<p class="empty">Không tìm thấy nhật kí phù hợp.</p>'}</div></section>`;
       utilityView.querySelector('#diary-add').onclick = showEditor;
       utilityView.querySelectorAll('[data-diary-entry]').forEach(button => button.onclick = () => showEntry(saved[Number(button.dataset.diaryEntry)]));
       const searchInput = utilityView.querySelector('#diary-search'), dateInput = utilityView.querySelector('#diary-filter-date');
-      searchInput.oninput = () => showList(searchInput.value, dateInput.value);
+      searchInput.oninput = () => { const value = searchInput.value; showList(value, dateInput.value); const refreshed = utilityView.querySelector('#diary-search'); refreshed.focus(); refreshed.setSelectionRange(value.length, value.length); };
       dateInput.onchange = () => showList(searchInput.value, dateInput.value);
     };
     const showEntry = item => {
-      utilityView.innerHTML = `<section class="diary-page diary-editor-drop"><button type="button" class="diary-back" id="diary-back">‹ Quay về</button><div class="utility-heading"><p class="eyebrow">${new Date(item.date).toLocaleDateString('vi-VN')}</p><h2>${item.icon} ${safe(item.title)}</h2></div><article class="diary-reading">${safe(item.content).replace(/\n/g, '<br>')}</article></section>`;
-      utilityView.querySelector('#diary-back').onclick = showList;
+      utilityView.innerHTML = `<section class="diary-page diary-editor-drop"><button type="button" class="diary-back round-btn" id="diary-back" aria-label="Quay về">‹</button><div class="utility-heading"><p class="eyebrow">${new Date(item.date).toLocaleDateString('vi-VN')}</p><h2>${item.icon} ${safe(item.title)}</h2></div><article class="diary-reading">${safe(item.content).replace(/\n/g, '<br>')}</article></section>`;
+      utilityView.querySelector('#diary-back').onclick = () => renderUtility('diary');
     };
     const showEditor = () => {
       const signature = diarySignatures[Math.floor(Math.random() * diarySignatures.length)], prompt = diaryPrompts[Math.floor(Math.random() * diaryPrompts.length)];
       const musicMoods = ['Mượn nhạc khơi dòng cảm xúc.', 'Giai điệu bật lối cảm xúc.', 'Để âm nhạc dẫn lối trang viết.', 'Nhạc thăng hoa, chữ đong đầy.', 'Bật nhạc, mở lòng, viết nên câu chuyện.', 'Nhạc lên, chữ tuôn.', 'Nhạc khơi nguồn, bút dẫn lối.'];
       const musicMood = musicMoods[Math.floor(Math.random() * musicMoods.length)];
       const diaryToday = new Date().toISOString().slice(0, 10);
-      utilityView.innerHTML = `<section class="diary-page diary-editor-drop"><button type="button" class="diary-back" id="diary-back">‹ Quay về</button><div class="utility-heading"><p class="eyebrow">KHÔNG GIAN RIÊNG</p><h2>Nhật kí</h2></div><p class="diary-signature">“${signature}”</p><form id="diary-form"><label>Ngày / tháng / năm<input id="diary-date" type="date" value="${diaryToday}" required></label><label>Tiêu đề <div class="diary-title-line"><input id="diary-title" placeholder="Đặt tiêu đề cho hôm nay..." required><span id="diary-emoji">✨</span></div></label><label>Nội dung <div class="diary-content-head"><span>Viết cho riêng bạn</span><div class="diary-disc-wrap"><em class="music-mood">${musicMood}</em><button type="button" id="diary-music" title="Kết nối Spotify">💿</button><i class="music-notes" id="music-notes">♪ ♫ ♬</i></div></div><textarea id="diary-content" placeholder="${prompt}" required></textarea></label><button class="save" type="submit">Lưu trang nhật kí</button></form></section>`;
+      utilityView.innerHTML = `<section class="diary-page diary-editor-drop"><button type="button" class="diary-back round-btn" id="diary-back" aria-label="Quay về">‹</button><div class="utility-heading"><p class="eyebrow">KHÔNG GIAN RIÊNG</p><h2>Nhật kí</h2></div><p class="diary-signature">“${signature}”</p><form id="diary-form"><label>Ngày / tháng / năm<input id="diary-date" type="date" value="${diaryToday}" required></label><label>Tiêu đề <div class="diary-title-line"><input id="diary-title" placeholder="Đặt tiêu đề cho nhật kí của bạn" required><span id="diary-emoji">✨</span></div></label><label>Nội dung <div class="diary-content-head"><span>Viết cho riêng bạn</span><div class="diary-disc-wrap"><em class="music-mood">${musicMood}</em><button type="button" id="diary-music" title="Kết nối Spotify">💿</button><i class="music-notes" id="music-notes">♪ ♫ ♬</i></div></div><textarea id="diary-content" placeholder="${prompt}" required></textarea></label><button class="save" type="submit">Lưu trang nhật kí</button></form></section>`;
       const titleInput = utilityView.querySelector('#diary-title'), emojiSpot = utilityView.querySelector('#diary-emoji');
       titleInput.oninput = () => emojiSpot.textContent = journalEmoji(titleInput.value, '');
-      utilityView.querySelector('#diary-back').onclick = showList;
+      utilityView.querySelector('#diary-back').onclick = () => renderUtility('diary');
       utilityView.querySelector('#diary-music').onclick = () => spotifyConnect.showModal();
       utilityView.querySelector('#diary-form').onsubmit = event => { event.preventDefault(); const title = titleInput.value.trim(), content = utilityView.querySelector('#diary-content').value.trim(), date = utilityView.querySelector('#diary-date').value; if (!title || !content || !date) return; saved.push({ title, content, icon: journalEmoji(title, content), date }); saveData('my-calendar-diary-v1', saved); showList(); };
     };
