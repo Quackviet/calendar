@@ -159,18 +159,45 @@ function queueCloudSave() {
     }
   }, 350);
 }
-const scheduleDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'];
+const scheduleDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+const scheduleSubjects = ['Toán', 'Văn', 'Anh', 'Sử', 'Địa lí', 'Sinh học', 'Hóa học', 'Vật lý', 'Tin học', 'GDKTPL', 'HĐTN-HN', 'GDTC', 'TABN', 'GDQP', 'TANC', 'Tự học', 'CLB'];
+let extraStudy = readSavedData('my-calendar-extra-study-v1');
+const extraStudyDialog = document.createElement('dialog');
+extraStudyDialog.className = 'extra-study-dialog';
+extraStudyDialog.innerHTML = `<form method="dialog" class="dialog-content" id="extra-study-form"><button class="close" type="button" aria-label="Đóng">×</button><p class="eyebrow">HỌC THÊM · T2 → CN</p><h2>Thêm lịch học</h2><label>Nội dung / lớp học<input id="extra-study-title" placeholder="Ví dụ: Học thêm Toán" required></label><label>Thứ<select id="extra-study-day">${scheduleDays.map(day => `<option>${day}</option>`).join('')}</select></label><label>Giờ bắt đầu<input id="extra-study-start-time" type="time" value="18:00" required></label><label>Giờ kết thúc<input id="extra-study-end-time" type="time" value="20:00" required></label><button class="save" type="submit">Lưu lịch học</button></form>`;
+document.body.append(extraStudyDialog);
+extraStudyDialog.querySelector('.close').onclick = () => extraStudyDialog.close();
+extraStudyDialog.querySelector('#extra-study-form').onsubmit = event => {
+  event.preventDefault();
+  const title = extraStudyDialog.querySelector('#extra-study-title').value.trim(), day = extraStudyDialog.querySelector('#extra-study-day').value, startTime = extraStudyDialog.querySelector('#extra-study-start-time').value, endTime = extraStudyDialog.querySelector('#extra-study-end-time').value;
+  if (!title || !day || !startTime || !endTime || endTime <= startTime) return alert('Khoảng thời gian chưa hợp lệ.');
+  extraStudy.push({ title, day, startTime, endTime });
+  saveData('my-calendar-extra-study-v1', extraStudy); extraStudyDialog.close(); renderSchedule();
+};
+const decorateConfirm = document.createElement('dialog');
+decorateConfirm.className = 'decorate-confirm';
+decorateConfirm.innerHTML = `<div class="dialog-content"><span class="decorate-confirm-icon">🎨</span><h2>Trang trí thời khóa biểu</h2><p>Bạn sẽ được chuyển đến mục trang trí thời khóa biểu. Bạn muốn xác nhận?</p><div><button type="button" class="cancel-decorate">Hủy</button><button type="button" class="approve-decorate">Đồng ý</button></div></div>`;
+document.body.append(decorateConfirm);
+decorateConfirm.querySelector('.cancel-decorate').onclick = () => decorateConfirm.close();
+const decorView = document.createElement('section');
+decorView.className = 'decor-view hidden';
+document.querySelector('.app-shell').append(decorView);
+const spotifyConnect = document.createElement('dialog');
+spotifyConnect.className = 'spotify-connect';
+spotifyConnect.innerHTML = `<div class="dialog-content"><span>🎧</span><p class="eyebrow">NGHE NHẠC CÙNG NHẬT KÍ</p><h2>Kết nối Spotify</h2><p>Mở ứng dụng Spotify trên thiết bị để chọn và phát trọn vẹn bài hát bạn yêu thích.</p><div><button type="button" id="cancel-spotify">Hủy</button><button type="button" id="open-spotify">Mở Spotify</button></div></div>`;
+document.body.append(spotifyConnect);
+spotifyConnect.querySelector('#cancel-spotify').onclick = () => spotifyConnect.close();
+spotifyConnect.querySelector('#open-spotify').onclick = () => { window.location.href = 'spotify:search:'; spotifyConnect.close(); };
 function renderSchedule() {
   const cell = (day, session, period) => {
     const entry = scheduleEntries.find(item => item.day === day && item.session === session && item.period === period);
-    return `<div class="schedule-cell ${entry ? 'filled' : ''}" role="button" tabindex="0" data-schedule-day="${day}" data-schedule-session="${session}" data-schedule-period="${period}" title="Chạm để nhập hoặc sửa môn học">${entry ? safe(entry.subject) : ''}</div>`;
+    return `<div class="schedule-cell ${entry ? 'filled' : ''}" role="button" tabindex="0" data-schedule-day="${day}" data-schedule-session="${session}" data-schedule-period="${period}" title="Chạm để chọn môn học">${entry ? safe(entry.subject) : ''}</div>`;
   };
-  scheduleView.innerHTML = `<div class="schedule-title"><button id="close-schedule" aria-label="Đóng thời khóa biểu">‹</button><div><p class="eyebrow">LỊCH CÁ NHÂN</p><h2>Thời khóa biểu</h2></div></div><section class="schedule-card"><div class="schedule-table"><div class="schedule-corner"></div>${scheduleDays.map((day, index) => `<div class="schedule-day day-${index + 2}">${day}</div>`).join('')}<div class="session-label morning">Sáng</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'morning', period))).join('')}<div class="session-label afternoon">Chiều</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'afternoon', period))).join('')}</div></section><form class="schedule-form" id="schedule-form"><label>Thứ<select id="schedule-day">${scheduleDays.map(day => `<option>${day}</option>`).join('')}</select></label><label>Buổi<select id="schedule-session"><option value="morning">Sáng</option><option value="afternoon">Chiều</option></select></label><label>Tiết<select id="schedule-period"><option value="1">Tiết 1</option><option value="2">Tiết 2</option><option value="3">Tiết 3</option><option value="4">Tiết 4</option></select></label><label class="subject-field">Môn học / công việc<input id="schedule-subject" placeholder="Ví dụ: Toán, Họp nhóm" required></label><button type="submit">Thêm vào bảng</button></form><p class="schedule-hint">Chọn thông tin rồi thêm vào ô tương ứng trong thời khóa biểu.</p>`;
+  const extraByDay = scheduleDays.map(day => ({ day, items: extraStudy.filter(item => item.day === day).sort((a, b) => a.startTime.localeCompare(b.startTime)) })).filter(group => group.items.length);
+  scheduleView.innerHTML = `<div class="schedule-title"><button id="close-schedule" aria-label="Đóng thời khóa biểu">‹</button><div><p class="eyebrow">LỊCH CÁ NHÂN</p><h2>Thời khóa biểu</h2></div></div><section class="schedule-card"><div class="schedule-table"><div class="schedule-corner"></div>${scheduleDays.map((day, index) => `<div class="schedule-day day-${index + 2}">${day}</div>`).join('')}<div class="session-label">Sáng</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'morning', period))).join('')}<div class="session-label">Chiều</div>${[1, 2, 3, 4].flatMap(period => scheduleDays.map(day => cell(day, 'afternoon', period))).join('')}</div></section><section class="extra-study"><div><p class="eyebrow">T2 → CN</p><h3>Học thêm</h3></div><button type="button" id="add-extra-study">+ Thêm lịch học</button><div class="extra-study-list">${extraByDay.length ? extraByDay.map(group => `<section class="extra-day-box"><h4>${group.day}</h4>${group.items.map(item => `<article><span>📚</span><div><strong>${safe(item.title)}</strong><small>${safe(item.startTime)} → ${safe(item.endTime)}</small></div><button type="button" data-remove-extra="${extraStudy.indexOf(item)}">×</button></article>`).join('')}</section>`).join('') : '<p>Chưa có lịch học thêm.</p>'}</div></section>`;
   const scheduleTable = scheduleView.querySelector('.schedule-table');
-  scheduleTable.style.gridTemplateColumns = '47px repeat(5, minmax(0, 1fr))';
+  scheduleTable.style.gridTemplateColumns = '47px repeat(7, minmax(0, 1fr))';
   scheduleTable.style.gridTemplateRows = '29px repeat(8, 34px)';
-  scheduleView.querySelector('#schedule-form').remove();
-  scheduleView.querySelector('.schedule-hint').remove();
   scheduleView.querySelector('#close-schedule').onclick = closeSchedule;
   scheduleView.querySelectorAll('[data-schedule-day]').forEach(cellElement => {
     const beginEdit = () => {
@@ -180,36 +207,64 @@ function renderSchedule() {
         period = Number(cellElement.dataset.schedulePeriod),
         old = scheduleEntries.find(item => item.day === day && item.session === session && item.period === period),
         input = document.createElement('input');
-      input.type = 'text';
-      input.value = old?.subject || '';
-      input.placeholder = 'Nhập môn';
+      input.type = 'text'; input.value = old?.subject || ''; input.placeholder = 'Nhập môn';
       input.setAttribute('aria-label', `Nhập môn học ${day}, ${session}, tiết ${period}`);
       input.style.cssText = 'width:100%;height:100%;padding:2px;border:0;border-radius:4px;background:#fff8eb;color:#73564a;text-align:center;font:800 8px Nunito,Arial,sans-serif;outline:2px solid #e68a52';
-      cellElement.replaceChildren(input);
-      input.focus();
-      input.select();
+      cellElement.replaceChildren(input); input.focus(); input.select();
       let committed = false;
       const saveCell = () => {
-        if (committed) return;
-        committed = true;
+        if (committed) return; committed = true;
         const subject = input.value.trim(), index = scheduleEntries.indexOf(old);
-        if (subject) {
-          if (old) old.subject = subject;
-          else scheduleEntries.push({ day, session, period, subject });
-        } else if (index >= 0) scheduleEntries.splice(index, 1);
-        saveData(STORAGE_KEYS.schedule, scheduleEntries);
-        renderSchedule();
+        if (subject) { if (old) old.subject = subject; else scheduleEntries.push({ day, session, period, subject }); }
+        else if (index >= 0) scheduleEntries.splice(index, 1);
+        saveData(STORAGE_KEYS.schedule, scheduleEntries); renderSchedule();
       };
-      input.onkeydown = event => {
-        if (event.key === 'Enter') saveCell();
-        if (event.key === 'Escape') { committed = true; renderSchedule(); }
-      };
+      input.onkeydown = event => { if (event.key === 'Enter') saveCell(); if (event.key === 'Escape') { committed = true; renderSchedule(); } };
       input.onblur = saveCell;
     };
     cellElement.onclick = beginEdit;
     cellElement.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); beginEdit(); } };
   });
+  scheduleView.querySelector('#add-extra-study').onclick = () => {
+    extraStudyDialog.querySelector('#extra-study-title').value = '';
+    extraStudyDialog.showModal();
+  };
+  scheduleView.querySelectorAll('[data-remove-extra]').forEach(button => button.onclick = () => { extraStudy.splice(Number(button.dataset.removeExtra), 1); saveData('my-calendar-extra-study-v1', extraStudy); renderSchedule(); });
 }
+function openDecorateSchedule() {
+  decorateConfirm.close();
+  scheduleView.classList.add('hidden');
+  document.querySelector('.bottom-nav').classList.add('hidden');
+  const drawCell = (day, session, period) => safe(scheduleEntries.find(item => item.day === day && item.session === session && item.period === period)?.subject || '');
+  const stickerSeeds = ['flower','star','rainbow','bear','butterfly','gamer','music','book','cat','planet','robot','rocket','fox','unicorn','sun','cloud','heart','tiger','magic','artist','panda','ocean','cake','soccer'];
+  decorView.innerHTML = `<header class="decor-head"><button type="button" id="close-decor">‹</button><div><p class="eyebrow">KHÔNG GIAN SÁNG TẠO</p><h2>Trang trí thời khóa biểu</h2></div></header><main class="decor-stage"><div class="decor-paper" id="decor-paper"><div class="decor-table"><div></div>${scheduleDays.map(day => `<b>${day.replace('Thứ ', 'T')}</b>`).join('')}<strong>Sáng</strong>${[1,2,3,4].flatMap(period => scheduleDays.map(day => `<span>${drawCell(day,'morning',period)}</span>`)).join('')}<strong>Chiều</strong>${[1,2,3,4].flatMap(period => scheduleDays.map(day => `<span>${drawCell(day,'afternoon',period)}</span>`)).join('')}</div><canvas id="decor-canvas"></canvas><div class="sticker-layer" id="sticker-layer"></div></div></main><div class="pen-drawer hidden" id="pen-drawer"><button type="button" data-pen="pen">✏️ Bút màu</button><button type="button" data-pen="glitter">✨ Bút kim tuyến</button><label><input id="brush-color" type="color" value="#ef7091"><span>Màu</span></label><label><span>Kích cỡ</span><input id="brush-size" type="range" min="1" max="22" value="3"></label><label><span>Độ đậm</span><input id="brush-alpha" type="range" min="10" max="100" value="100"></label></div><div class="sticker-drawer hidden" id="sticker-drawer">${stickerSeeds.map(seed => `<button type="button" data-sticker="${seed}"><img src="https://api.dicebear.com/10.x/notionists/svg?seed=${seed}&backgroundColor=fff1e7" alt="Sticker ${seed}"></button>`).join('')}</div><nav class="decor-tools"><button type="button" id="pen-tool">✏️<small>Bút</small></button><button type="button" data-tool="eraser">⌫<small>Tẩy</small></button><button type="button" id="undo-decor">↶<small>Hoàn tác</small></button><button type="button" id="clear-decor">🗑️<small>Xóa</small></button><button type="button" id="sticker-tool">😀<small>Sticker</small></button></nav>`;
+  const paper = decorView.querySelector('#decor-paper'), canvas = decorView.querySelector('#decor-canvas'), ctx = canvas.getContext('2d');
+  let scale = 1, rotation = 0, drawing = false, tool = 'pen', color = '#ef7091', brushSize = 3, alpha = 1, history = [];
+  const resizeCanvas = () => { const rect = paper.getBoundingClientRect(); canvas.width = rect.width * devicePixelRatio; canvas.height = rect.height * devicePixelRatio; canvas.style.width = `${rect.width}px`; canvas.style.height = `${rect.height}px`; ctx.scale(devicePixelRatio, devicePixelRatio); };
+  resizeCanvas();
+  const applyTransform = () => { paper.style.transform = `scale(${scale}) rotate(${rotation}deg)`; };
+  const point = event => { const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale }; };
+  const fingers = new Map(); let pinch = null;
+  const distance = ([a,b]) => Math.hypot(a.x-b.x,a.y-b.y), angle = ([a,b]) => Math.atan2(b.y-a.y,b.x-a.x) * 180 / Math.PI;
+  canvas.onpointerdown = event => { canvas.setPointerCapture(event.pointerId); fingers.set(event.pointerId, {x:event.clientX,y:event.clientY}); if (fingers.size === 2) { const pair=[...fingers.values()]; pinch={distance:distance(pair),angle:angle(pair),scale,rotation}; drawing=false; return; } drawing=true; const p=point(event); history.push(ctx.getImageData(0,0,canvas.width,canvas.height)); ctx.beginPath(); ctx.moveTo(p.x,p.y); };
+  canvas.onpointermove = event => { if (!fingers.has(event.pointerId)) return; fingers.set(event.pointerId,{x:event.clientX,y:event.clientY}); if (fingers.size === 2 && pinch) { const pair=[...fingers.values()]; scale=Math.max(.65,Math.min(1.7,pinch.scale*distance(pair)/pinch.distance)); rotation=pinch.rotation+(angle(pair)-pinch.angle); applyTransform(); return; } if (!drawing) return; const p=point(event); ctx.lineTo(p.x,p.y); ctx.lineWidth=tool==='eraser'?Math.max(14,brushSize*3):brushSize; ctx.lineCap='round'; ctx.strokeStyle=tool==='eraser'?'#fffaf0':color; ctx.globalAlpha=alpha; ctx.stroke(); if (tool==='glitter') { for(let i=0;i<4;i++){ctx.fillStyle='#fff';ctx.globalAlpha=.9;ctx.fillRect(p.x+(Math.random()-.5)*brushSize*5,p.y+(Math.random()-.5)*brushSize*5,2,2);} } ctx.globalAlpha=1; };
+  const stopPointer = event => { fingers.delete(event.pointerId); if (fingers.size < 2) pinch=null; drawing=false; }; canvas.onpointerup=stopPointer; canvas.onpointercancel=stopPointer;
+  decorView.querySelectorAll('[data-tool]').forEach(button => button.onclick = () => tool = button.dataset.tool);
+  const penDrawer = decorView.querySelector('#pen-drawer');
+  decorView.querySelector('#pen-tool').onclick = () => penDrawer.classList.toggle('hidden');
+  penDrawer.querySelectorAll('[data-pen]').forEach(button => button.onclick = () => { tool = button.dataset.pen; penDrawer.classList.add('hidden'); });
+  penDrawer.querySelector('#brush-color').oninput = event => color = event.target.value;
+  penDrawer.querySelector('#brush-size').oninput = event => brushSize = Number(event.target.value);
+  penDrawer.querySelector('#brush-alpha').oninput = event => alpha = Number(event.target.value) / 100;
+  decorView.querySelector('#undo-decor').onclick = () => { const previous = history.pop(); if (previous) ctx.putImageData(previous,0,0); };
+  decorView.querySelector('#clear-decor').onclick = () => ctx.clearRect(0,0,canvas.width,canvas.height);
+  const drawer = decorView.querySelector('#sticker-drawer');
+  decorView.querySelector('#sticker-tool').onclick = () => drawer.classList.toggle('hidden');
+  drawer.querySelectorAll('[data-sticker]').forEach(button => button.onclick = () => { const sticker = document.createElement('img'); sticker.src = `https://api.dicebear.com/10.x/notionists/svg?seed=${button.dataset.sticker}&backgroundColor=fff1e7`; sticker.alt = 'Sticker'; sticker.style.cssText = `position:absolute;left:${35 + Math.random()*30}%;top:${35 + Math.random()*25}%;width:38px;height:38px;z-index:5`; paper.querySelector('#sticker-layer').append(sticker); drawer.classList.add('hidden'); });
+  decorView.querySelector('#close-decor').onclick = () => { decorView.classList.add('hidden'); document.querySelector('.bottom-nav').classList.remove('hidden'); scheduleView.classList.remove('hidden'); renderSchedule(); };
+  decorView.classList.remove('hidden');
+}
+decorateConfirm.querySelector('.approve-decorate').onclick = openDecorateSchedule;
 function resetThemeToHome() {
   activeArea = 'calendar';
   document.querySelector('.app-shell').classList.remove('gaming-theme', 'work-theme');
@@ -262,7 +317,13 @@ const allTasksNav = document.createElement('button');
 allTasksNav.className = 'nav-item';
 allTasksNav.innerHTML = '<span>☷</span>Danh sách';
 document.querySelector('.bottom-nav').insertBefore(allTasksNav, document.querySelector('.bottom-nav .nav-item:last-child'));
+const diaryNav = document.createElement('button');
+diaryNav.className = 'nav-item';
+diaryNav.innerHTML = '<span>✎</span>Nhật kí';
+document.querySelector('.bottom-nav').insertBefore(diaryNav, document.querySelector('.bottom-nav .nav-item:last-child'));
 const navButtons = [...document.querySelectorAll('.bottom-nav .nav-item')];
+const diarySignatures = ['Nơi mỗi dòng chữ làm dịu một góc tâm hồn.', 'Lắng nghe chính mình, từng ngày một.', 'Ghi lại hôm nay để trân trọng ngày mai.', 'Nơi những suy nghĩ tìm thấy câu trả lời.', 'Viết cho bản thân của hiện tại và tương lai.', 'Giữ lại những khoảnh khắc thời gian không thể xóa nhòa.', 'Thước phim cuộc đời qua từng trang viết.', 'Nơi kỷ niệm trở thành tài sản vô giá.', 'Mỗi ngày một dòng, một đời một cuốn sách.', 'Gói gọn ngày hôm nay vào một góc nhớ.', 'Chuyện hôm nay, giữ lại đây.', 'Không gian của riêng bạn.', 'Nghĩ gì, viết nấy.', 'Ghi chép nhỏ, giá trị lớn.', 'Tháo gỡ những suy nghĩ bộn bề.', 'Write today. Remember tomorrow.', 'Your thoughts, your space.', 'Capturing moments, creating memories.', 'A safe place for your mind.', 'Dear Diary, today was...'];
+const diaryPrompts = ['Hôm nay của bạn thế nào? Chia sẻ với tôi nhé...', 'Hãy để những suy nghĩ của bạn tự do trút xuống đây...', 'Không gian này là của riêng bạn, hãy cứ là chính mình...', 'Viết ra những điều hôm nay bạn chưa thể nói thành lời...', 'Trút bỏ mọi bộn bề, trang giấy này luôn sẵn sàng lắng nghe bạn...', 'Điều tuyệt vời nhất xảy ra với bạn hôm nay là gì?', 'Ghi lại một khoảnh khắc bạn muốn lưu giữ mãi mãi...', 'Hôm nay bạn cảm thấy biết ơn điều gì nhất?', 'Nhật ký ơi, hôm nay là một ngày...', 'Lưu lại một mảnh ghép ý nghĩa của ngày hôm nay...', "What's on your mind today?...", 'Pour your heart out...', 'Collect moments, write them down...', 'Dear future self, today I...'];
 const viewOrder = ['month', 'list', 'week', 'day'];
 function animateScreen(direction) {
   const shell = document.querySelector('.app-shell');
@@ -307,6 +368,11 @@ function emoji(title, desc) {
       [/deadline|bao cao|nop|report/, '📌']
     ];
   return (rules.find(([r]) => r.test(t)) || [, '✨'])[1];
+}
+function journalEmoji(title, content) {
+  const t = `${title} ${content}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const feeling = [[/vui|hanh phuc|tuyet voi|yeu|cuoi/, '😊'], [/buon|khoc|co don|met moi/, '😔'], [/tuc gian|gian|that vong/, '😤'], [/lo lang|so hai|cang thang/, '😟'], [/cam on|biet on/, '🙏'], [/nho|ky niem/, '💭'], [/hy vong|uoc mo/, '🌟']].find(([rule]) => rule.test(t));
+  return feeling ? feeling[1] : emoji(title, content);
 }
 
 const areaOf = event => event.area || 'calendar';
@@ -562,7 +628,7 @@ function renderStats(date = dateKey()) {
 }
 
 function renderUtility(kind) {
-  navButtons.forEach((button, index) => button.classList.toggle('selected', index === { tasks: 1, stats: 2, all: 3, profile: 4 }[kind]));
+  navButtons.forEach((button, index) => button.classList.toggle('selected', index === { tasks: 1, stats: 2, all: 3, diary: 4, profile: 5 }[kind]));
   scheduleView.classList.add('hidden');
   viewTabs.classList.add('hidden');
   utilityView.classList.remove('hidden');
@@ -576,6 +642,31 @@ function renderUtility(kind) {
   }
   if (kind === 'profile') {
     renderProfile();
+    return;
+  }
+  if (kind === 'diary') {
+    const saved = readSavedData('my-calendar-diary-v1');
+    const showList = () => {
+      utilityView.innerHTML = `<section class="diary-page"><div class="utility-heading"><p class="eyebrow">KHÔNG GIAN RIÊNG</p><h2>Nhật kí</h2></div><button class="diary-add" id="diary-add">＋ Thêm nhật kí</button><div class="diary-saved">${saved.length ? saved.slice().reverse().map((item, index) => `<button class="diary-entry" data-diary-entry="${saved.length - 1 - index}"><small>${new Date(item.date).toLocaleDateString('vi-VN')}</small><strong>${safe(item.title)}</strong></button>`).join('') : '<p class="empty">Chưa có trang nhật kí nào. Hãy viết một điều cho riêng bạn.</p>'}</div></section>`;
+      utilityView.querySelector('#diary-add').onclick = showEditor;
+      utilityView.querySelectorAll('[data-diary-entry]').forEach(button => button.onclick = () => showEntry(saved[Number(button.dataset.diaryEntry)]));
+    };
+    const showEntry = item => {
+      utilityView.innerHTML = `<section class="diary-page diary-editor-drop"><button class="diary-back" id="diary-back">‹ Quay về</button><div class="utility-heading"><p class="eyebrow">${new Date(item.date).toLocaleDateString('vi-VN')}</p><h2>${item.icon} ${safe(item.title)}</h2></div><article class="diary-reading">${safe(item.content).replace(/\n/g, '<br>')}</article></section>`;
+      utilityView.querySelector('#diary-back').onclick = showList;
+    };
+    const showEditor = () => {
+      const signature = diarySignatures[Math.floor(Math.random() * diarySignatures.length)], prompt = diaryPrompts[Math.floor(Math.random() * diaryPrompts.length)];
+      const musicMoods = ['Mượn nhạc khơi dòng cảm xúc.', 'Giai điệu bật lối cảm xúc.', 'Để âm nhạc dẫn lối trang viết.', 'Nhạc thăng hoa, chữ đong đầy.', 'Bật nhạc, mở lòng, viết nên câu chuyện.', 'Nhạc lên, chữ tuôn.', 'Nhạc khơi nguồn, bút dẫn lối.'];
+      const musicMood = musicMoods[Math.floor(Math.random() * musicMoods.length)];
+      utilityView.innerHTML = `<section class="diary-page diary-editor-drop"><button class="diary-back" id="diary-back">‹ Quay về</button><div class="utility-heading"><p class="eyebrow">KHÔNG GIAN RIÊNG</p><h2>Nhật kí</h2></div><p class="diary-signature">“${signature}”</p><form id="diary-form"><label>Tiêu đề <div class="diary-title-line"><input id="diary-title" placeholder="Đặt tiêu đề cho hôm nay..." required><span id="diary-emoji">✨</span></div></label><label>Nội dung <div class="diary-content-head"><span>Viết cho riêng bạn</span><div class="diary-disc-wrap"><em class="music-mood">${musicMood}</em><button type="button" id="diary-music" title="Kết nối Spotify">💿</button><i class="music-notes" id="music-notes">♪ ♫ ♬</i></div></div><textarea id="diary-content" placeholder="${prompt}" required></textarea></label><button class="save" type="submit">Lưu trang nhật kí</button></form></section>`;
+      const titleInput = utilityView.querySelector('#diary-title'), emojiSpot = utilityView.querySelector('#diary-emoji');
+      titleInput.oninput = () => emojiSpot.textContent = journalEmoji(titleInput.value, '');
+      utilityView.querySelector('#diary-back').onclick = showList;
+      utilityView.querySelector('#diary-music').onclick = () => spotifyConnect.showModal();
+      utilityView.querySelector('#diary-form').onsubmit = event => { event.preventDefault(); const title = titleInput.value.trim(), content = utilityView.querySelector('#diary-content').value.trim(); if (!title || !content) return; saved.push({ title, content, icon: journalEmoji(title, content), date: new Date().toISOString() }); saveData('my-calendar-diary-v1', saved); showList(); };
+    };
+    showList();
     return;
   }
   if (kind === 'all') {
@@ -728,6 +819,7 @@ navButtons[0].onclick = () => {
 navButtons[1].onclick = () => { const direction = bottomDirection(1); renderUtility('tasks'); animateScreen(direction); };
 navButtons[2].onclick = () => { const direction = bottomDirection(2); renderUtility('stats'); animateScreen(direction); };
 navButtons[3].onclick = () => { const direction = bottomDirection(3); renderUtility('all'); animateScreen(direction); };
-navButtons[4].onclick = () => { const direction = bottomDirection(4); renderUtility('profile'); animateScreen(direction); };
+navButtons[4].onclick = () => { const direction = bottomDirection(4); renderUtility('diary'); animateScreen(direction); };
+navButtons[5].onclick = () => { const direction = bottomDirection(5); renderUtility('profile'); animateScreen(direction); };
 
 renderAll();
