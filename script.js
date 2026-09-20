@@ -187,7 +187,7 @@ spotifyConnect.className = 'spotify-connect';
 spotifyConnect.innerHTML = `<div class="dialog-content"><span>🎧</span><p class="eyebrow">NGHE NHẠC CÙNG NHẬT KÍ</p><h2>Kết nối Spotify</h2><p>Mở ứng dụng Spotify trên thiết bị để chọn và phát trọn vẹn bài hát bạn yêu thích.</p><div><button type="button" id="cancel-spotify">Hủy</button><button type="button" id="open-spotify">Mở Spotify</button></div></div>`;
 document.body.append(spotifyConnect);
 spotifyConnect.querySelector('#cancel-spotify').onclick = () => spotifyConnect.close();
-spotifyConnect.querySelector('#open-spotify').onclick = () => { window.location.href = 'spotify:search:'; spotifyConnect.close(); };
+spotifyConnect.querySelector('#open-spotify').onclick = () => { document.querySelector('#diary-music')?.classList.add('playing'); document.querySelector('#music-notes')?.classList.add('playing'); window.location.href = 'spotify:search:'; spotifyConnect.close(); };
 function renderSchedule() {
   const cell = (day, session, period) => {
     const entry = scheduleEntries.find(item => item.day === day && item.session === session && item.period === period);
@@ -405,8 +405,26 @@ function showConflict(otherArea) {
   const toast = document.createElement('div');
   toast.className = 'conflict-toast';
   toast.innerHTML = `⚠️ <span>Bạn đã đặt công việc ở khung giờ này trùng với công việc ở <b>${areaNames[otherArea]}</b>.</span>`;
-  document.body.append(toast);
+  const activeDialog = document.querySelector('#event-dialog[open]');
+  (activeDialog || document.body).append(toast);
   setTimeout(() => toast.remove(), 4800);
+}
+function showTimeError(message) {
+  document.querySelector('.time-error-toast')?.remove();
+  const toast = document.createElement('div');
+  toast.className = 'time-error-toast';
+  toast.textContent = message;
+  const activeDialog = document.querySelector('#event-dialog[open]');
+  (activeDialog || document.body).append(toast);
+  setTimeout(() => toast.remove(), 4200);
+}
+function showTimeOverlap() {
+  document.querySelector('.time-error-toast')?.remove();
+  const toast = document.createElement('div');
+  toast.className = 'time-error-toast';
+  toast.textContent = 'Trùng thời gian rồi kìa! Đặt thời gian chỉnh chu vào!!!';
+  document.body.append(toast);
+  setTimeout(() => toast.remove(), 4200);
 }
 
 function eventCards(list) {
@@ -541,7 +559,8 @@ function renderDay() {
 
 function statusOf(event) {
   if (event.done) return 'completed';
-  return new Date(`${endDateOf(event)}T${endTimeOf(event)}`) < new Date() ? 'overdue' : 'pending';
+  const deadline = new Date(`${endDateOf(event)}T${endTimeOf(event)}:00`);
+  return Number.isFinite(deadline.getTime()) && Date.now() > deadline.getTime() ? 'overdue' : 'pending';
 }
 
 function dailyList(title, items, status) {
@@ -574,14 +593,28 @@ function renderProfile() {
     completed = today.filter(event => statusOf(event) === 'completed'),
     pending = today.filter(event => statusOf(event) === 'pending'),
     overdue = today.filter(event => statusOf(event) === 'overdue'),
-    streak = streakCount();
-  utilityView.innerHTML = `<div class="profile-card"><div class="profile-avatar">NT</div><div><h2>Người dùng</h2><p>Công việc ngày ${pad(
-    state.day
-  )}/${pad(state.month + 1)}</p></div></div><section class="streak-card"><span>🔥</span><div><strong>${streak} ngày chuỗi</strong><p>Hoàn thành tất cả việc trong ngày để duy trì chuỗi.</p></div></section><div class="daily-tasks">${dailyList(
+    streak = streakCount(),
+    profile = readSavedObject('my-calendar-profile-v1', { name: 'Người dùng', bio: '' });
+  utilityView.innerHTML = `<div class="profile-card"><div class="profile-avatar">${safe(profile.name.slice(0, 2).toUpperCase() || 'ND')}</div><div class="profile-info"><div><h2>${safe(profile.name)}</h2><button type="button" id="edit-profile" aria-label="Đổi tên người dùng">✎</button></div><input id="profile-bio" value="${safe(profile.bio)}" placeholder="Nhập tiểu sử"></div></div><section class="streak-card"><span>🔥</span><div><strong>${streak} ngày chuỗi</strong><p>Hoàn thành tất cả việc trong ngày để duy trì chuỗi.</p></div></section><div class="daily-tasks">${dailyList(
     'Đã hoàn thành',
     completed,
     'completed'
   )}${dailyList('Chưa hoàn thành', pending, 'pending')}${dailyList('Bị trễ hẹn', overdue, 'overdue')}</div>`;
+  const bioInput = utilityView.querySelector('#profile-bio');
+  bioInput.onchange = () => { profile.bio = bioInput.value.trim(); saveData('my-calendar-profile-v1', profile); };
+  utilityView.querySelector('#edit-profile').onclick = () => {
+    let renameDialog = document.querySelector('#rename-profile-dialog');
+    if (!renameDialog) {
+      renameDialog = document.createElement('dialog');
+      renameDialog.id = 'rename-profile-dialog';
+      renameDialog.innerHTML = '<form class="dialog-content" id="rename-profile-form"><button class="close" type="button">×</button><p class="eyebrow">HỒ SƠ CÁ NHÂN</p><h2>Đổi tên</h2><label>Tên người dùng<input id="rename-profile-input" required></label><button class="save" type="submit">Lưu tên</button></form>';
+      document.body.append(renameDialog);
+      renameDialog.querySelector('.close').onclick = () => renameDialog.close();
+    }
+    renameDialog.querySelector('#rename-profile-input').value = profile.name;
+    renameDialog.querySelector('#rename-profile-form').onsubmit = event => { event.preventDefault(); const name = renameDialog.querySelector('#rename-profile-input').value.trim(); if (!name) return; profile.name = name; saveData('my-calendar-profile-v1', profile); renameDialog.close(); renderProfile(); };
+    renameDialog.showModal();
+  };
 }
 
 /* === HÀM HIỆU ỨNG ĐÃ ĐƯỢC CẬP NHẬT TẠI ĐÂY === */
@@ -621,13 +654,13 @@ function statsEffect(percent, total) {
 function renderStats(date = dateKey()) {
   const items = allForDate(date),
     completed = items.filter(event => event.done).length,
-    overdue = 0,
-    pending = items.length - completed,
+    overdue = items.filter(event => statusOf(event) === 'overdue').length,
+    pending = items.filter(event => statusOf(event) === 'pending').length,
     total = items.length,
     completePercent = total ? Math.round((completed / total) * 100) : 0,
-    pendingPercent = total ? 100 - completePercent : 0,
-    overduePercent = 0,
-    pie = total ? `conic-gradient(#55d0aa 0 ${completePercent}%,#9b7cf7 ${completePercent}% 100%)` : '#e8ecf1';
+    overduePercent = total ? Math.round((overdue / total) * 100) : 0,
+    pendingPercent = total ? Math.max(0, 100 - completePercent - overduePercent) : 0,
+    pie = total ? `conic-gradient(#55d0aa 0 ${completePercent}%,#9b7cf7 ${completePercent}% ${completePercent + pendingPercent}%,#f17784 ${completePercent + pendingPercent}% 100%)` : '#e8ecf1';
   utilityView.innerHTML = `<div class="utility-heading"><p class="eyebrow">THỐNG KÊ TRONG NGÀY</p><h2>Tiến độ công việc</h2></div><label class="stats-date">Chọn ngày <input id="stats-date" type="date" value="${date}"></label><section class="pie-card"><div class="pie-chart" style="background:${pie}"><span>${total}</span><small>công việc</small></div><div class="pie-legend"><p><i class="complete"></i>Đã hoàn thành <b>${completePercent}%</b></p><p><i class="pending"></i>Chưa hoàn thành <b>${pendingPercent}%</b></p><p><i class="overdue"></i>Bị trễ <b>${overduePercent}%</b></p></div></section>`;
   document.querySelector('#stats-date').onchange = event => renderStats(event.target.value);
   statsEffect(completePercent, total);
@@ -690,12 +723,12 @@ function renderUtility(kind) {
   }
   if (kind === 'tasks') {
     const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    const taskSections = [['completed','Đã hoàn thành'],['pending','Chưa hoàn thành'],['overdue','Trễ hẹn']];
     utilityView.innerHTML = `<div class="utility-heading"><p class="eyebrow">QUẢN LÝ CÁ NHÂN</p><h2>Công việc</h2><span>${
       sorted.filter(event => event.done).length
-    }/${sorted.length} hoàn thành</span></div><div class="task-list">${
-      sorted.length
-        ? sorted
-            .map(
+    }/${sorted.length} hoàn thành</span></div><div class="task-list">${sorted.length ? taskSections.map(([status, label]) => {
+      const list = sorted.filter(event => statusOf(event) === status);
+      return `<section class="task-status ${status}"><h3>${label}<span>${list.length}</span></h3>${list.length ? list.map(
               (event, index) =>
                 `<button class="task-card ${event.done ? 'done' : ''}" data-task="${events.indexOf(event)}"><i>${
                   event.done ? '✓' : ''
@@ -703,10 +736,8 @@ function renderUtility(kind) {
                   .split('-')
                   .reverse()
                   .join('/')}</small></div></button>`
-            )
-            .join('')
-        : '<p class="empty">Chưa có công việc. Hãy thêm từ mục Lịch.</p>'
-    }</div>`;
+            ).join('') : '<p>Không có công việc.</p>'}</section>`;
+    }).join('') : '<p class="empty">Chưa có công việc. Hãy thêm từ mục Lịch.</p>'}</div>`;
     utilityView.querySelectorAll('[data-task]').forEach(
       button =>
         (button.onclick = () => {
@@ -807,17 +838,40 @@ document.querySelector('#event-form').onsubmit = e => {
     endTime = endTimeInput.value,
     description = document.querySelector('#event-description').value.trim();
   if (!title || !date || !time || !endDate || !endTime) return;
-  if (new Date(`${endDate}T${endTime}`) < new Date(`${date}T${time}`)) {
-    alert('Thời điểm kết thúc phải sau thời điểm bắt đầu.');
+  const newStart = new Date(`${date}T${time}:00`).getTime();
+  const newEnd = new Date(`${endDate}T${endTime}:00`).getTime();
+  const startClashesWithExisting = events.some(event => {
+    const eventStart = new Date(`${event.date}T${event.time}:00`).getTime();
+    const eventEnd = new Date(`${endDateOf(event)}T${endTimeOf(event)}:00`).getTime();
+    return (event.date === date && event.time === time) || (newStart >= eventStart && newStart < eventEnd);
+  });
+  // When the submitted slot has no duration but starts in an occupied slot,
+  // the meaningful message is the scheduling conflict, not a generic input error.
+  if (newEnd <= newStart && startClashesWithExisting) {
+    showTimeOverlap();
     return;
   }
+  if (endDate < date) {
+    showTimeError('Thời gian kết thúc phải sau thời gian bắt đầu.');
+    return;
+  }
+  if (endDate === date && endTime <= time) {
+    showTimeError('Giờ kết thúc phải sau giờ bắt đầu.');
+    return;
+  }
+  const hasTimeOverlap = events.some(event => {
+    const eventStart = new Date(`${event.date}T${event.time}:00`).getTime();
+    const eventEnd = new Date(`${endDateOf(event)}T${endTimeOf(event)}:00`).getTime();
+    return newStart < eventEnd && newEnd > eventStart;
+  });
   const conflictingEvent = events.find(event => event.date === date && event.time === time && areaOf(event) !== activeArea);
   events.push({ title, date, time, endDate, endTime, description, area: activeArea, icon: emoji(title, description), color: colors[events.length % colors.length] });
   saveData(STORAGE_KEYS.events, events);
-  if (conflictingEvent) showConflict(areaOf(conflictingEvent));
   dialog.close();
   e.target.reset();
   select(date);
+  if (hasTimeOverlap) showTimeOverlap();
+  else if (conflictingEvent) showConflict(areaOf(conflictingEvent));
 };
 navButtons[0].onclick = () => {
   const direction = bottomDirection(0);
