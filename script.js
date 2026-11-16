@@ -87,6 +87,12 @@ function holidayFor(key) {
   const [, month, day] = key.split('-');
   return vietnamHolidays[`${month}-${day}`] || lunarHolidays2026[key] || '';
 }
+const environmentalDays = {
+  '04-22': { name: 'Ngày Quốc tế Mẹ Trái Đất', note: 'Ngày nhắc chúng ta sống hài hòa với thiên nhiên.' },
+  '05-22': { name: 'Ngày Quốc tế Đa dạng Sinh học', note: 'Cùng bảo vệ sự phong phú của muôn loài.' },
+  '06-05': { name: 'Ngày Môi trường Thế giới', note: 'Ngày hành động toàn cầu do UNEP dẫn dắt.' }
+};
+function environmentalDayFor(key) { return environmentalDays[key.slice(5)] || null; }
 
 const weekdays = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
 const colors = ['mint', 'pink', 'purple'],
@@ -327,6 +333,14 @@ const diaryNav = document.createElement('button');
 diaryNav.className = 'nav-item';
 diaryNav.innerHTML = '<span>✎</span>Nhật kí';
 document.querySelector('.bottom-nav').insertBefore(diaryNav, document.querySelector('.bottom-nav .nav-item:last-child'));
+const environmentNav = document.createElement('button');
+environmentNav.className = 'nav-item';
+environmentNav.innerHTML = '<span><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 3.5C12 3.7 5.2 5.2 4 11.2c-.7 3.2 1.5 5.6 4.4 5.6 6.1 0 10.7-5.3 12.1-13.3Z"/><path d="M3 21c3.1-5.3 7.3-8.8 13.2-11.8"/></svg></span>Môi trường';
+document.querySelector('.bottom-nav').insertBefore(environmentNav, document.querySelector('.bottom-nav .nav-item:last-child'));
+const quizNav = document.createElement('button');
+quizNav.className = 'nav-item';
+quizNav.innerHTML = '<span>?</span>Đố vui';
+document.querySelector('.bottom-nav').insertBefore(quizNav, document.querySelector('.bottom-nav .nav-item:last-child'));
 const navButtons = [...document.querySelectorAll('.bottom-nav .nav-item')];
 const diarySignatures = ['Nơi mỗi dòng chữ làm dịu một góc tâm hồn.', 'Lắng nghe chính mình, từng ngày một.', 'Ghi lại hôm nay để trân trọng ngày mai.', 'Nơi những suy nghĩ tìm thấy câu trả lời.', 'Viết cho bản thân của hiện tại và tương lai.', 'Giữ lại những khoảnh khắc thời gian không thể xóa nhòa.', 'Thước phim cuộc đời qua từng trang viết.', 'Nơi kỷ niệm trở thành tài sản vô giá.', 'Mỗi ngày một dòng, một đời một cuốn sách.', 'Gói gọn ngày hôm nay vào một góc nhớ.', 'Chuyện hôm nay, giữ lại đây.', 'Không gian của riêng bạn.', 'Nghĩ gì, viết nấy.', 'Ghi chép nhỏ, giá trị lớn.', 'Tháo gỡ những suy nghĩ bộn bề.', 'Write today. Remember tomorrow.', 'Your thoughts, your space.', 'Capturing moments, creating memories.', 'A safe place for your mind.', 'Dear Diary, today was...'];
 const diaryPrompts = ['Hôm nay của bạn thế nào? Chia sẻ với tôi nhé...', 'Hãy để những suy nghĩ của bạn tự do trút xuống đây...', 'Không gian này là của riêng bạn, hãy cứ là chính mình...', 'Viết ra những điều hôm nay bạn chưa thể nói thành lời...', 'Trút bỏ mọi bộn bề, trang giấy này luôn sẵn sàng lắng nghe bạn...', 'Điều tuyệt vời nhất xảy ra với bạn hôm nay là gì?', 'Ghi lại một khoảnh khắc bạn muốn lưu giữ mãi mãi...', 'Hôm nay bạn cảm thấy biết ơn điều gì nhất?', 'Nhật ký ơi, hôm nay là một ngày...', 'Lưu lại một mảnh ghép ý nghĩa của ngày hôm nay...', "What's on your mind today?...", 'Pour your heart out...', 'Collect moments, write them down...', 'Dear future self, today I...'];
@@ -466,13 +480,15 @@ function renderCalendar() {
       shown = inMonth ? day : day <= 0 ? prev + day : day - total,
       key = inMonth ? `${state.year}-${pad(state.month + 1)}-${pad(day)}` : '',
       items = inMonth ? forDate(key) : [],
+      ecoDay = inMonth ? environmentalDayFor(key) : null,
       button = document.createElement('button');
     const isToday = inMonth && state.year === nowDate.getFullYear() && state.month === nowDate.getMonth() && day === nowDate.getDate();
-    button.className = `date ${inMonth ? '' : 'muted'} ${inMonth && day === state.day ? 'selected' : ''} ${isToday ? 'today' : ''} ${inMonth && conflictsForDate(key) ? 'time-conflict' : ''}`;
+    button.className = `date ${inMonth ? '' : 'muted'} ${inMonth && day === state.day ? 'selected' : ''} ${isToday ? 'today' : ''} ${ecoDay ? 'eco-day' : ''} ${inMonth && conflictsForDate(key) ? 'time-conflict' : ''}`;
+    if (ecoDay) button.title = ecoDay.name;
     button.innerHTML = `<span>${shown}</span><i class="event-markers">${items
       .slice(0, 3)
       .map(e => `<b class="${e.color}"></b>`)
-      .join('')}</i>`;
+      .join('')}${ecoDay ? '<b class="eco-marker">✦</b>' : ''}</i>`;
     if (inMonth) button.onclick = () => select(key);
     grid.append(button);
   }
@@ -493,10 +509,12 @@ function markHolidays() {
 
 function renderAgenda() {
   const d = fromKey(dateKey()),
-    holiday = holidayFor(dateKey());
+    holiday = holidayFor(dateKey()),
+    ecoDay = environmentalDayFor(dateKey());
   document.querySelector('#agenda-date').textContent = `${weekdays[d.getDay()].toUpperCase()}, ${pad(state.day)} ${months[state.month]}, ${state.year}`;
   document.querySelector('#events').innerHTML = `${
     holiday ? `<article class="holiday-card">✨ <div><strong>${holiday}</strong><small>Ngày đặc biệt tại Việt Nam</small></div></article>` : ''
+  }${ecoDay ? `<article class="eco-day-card"><span>🌿</span><div><strong>${ecoDay.name}</strong><small>${ecoDay.note}</small></div></article>` : ''
   }${eventCards(forDate(dateKey()))}`;
   bindDeleteButtons();
 }
@@ -667,7 +685,7 @@ function renderStats(date = dateKey()) {
 }
 
 function renderUtility(kind) {
-  navButtons.forEach((button, index) => button.classList.toggle('selected', index === { tasks: 1, stats: 2, all: 3, diary: 4, profile: 5 }[kind]));
+  navButtons.forEach((button, index) => button.classList.toggle('selected', index === { tasks: 1, stats: 2, all: 3, diary: 4, environment: 5, quiz: 6, profile: 7 }[kind]));
   scheduleView.classList.add('hidden');
   viewTabs.classList.add('hidden');
   utilityView.classList.remove('hidden');
@@ -681,6 +699,54 @@ function renderUtility(kind) {
   }
   if (kind === 'profile') {
     renderProfile();
+    return;
+  }
+  if (kind === 'environment') {
+    utilityView.innerHTML = `<section class="environment-page"><div class="utility-heading"><p class="eyebrow">SỐNG XANH · HÀNH ĐỘNG CHUNG</p><h2>Cùng bảo vệ môi trường</h2><span>Những thay đổi nhỏ sẽ tạo nên tác động lớn khi chúng ta cùng làm.</span></div><article class="environment-fact"><span>🤝</span><div><strong>Hợp tác toàn cầu để phục hồi thiên nhiên</strong><p>Liên Hợp Quốc phát động Thập kỷ Phục hồi Hệ sinh thái 2021–2030, do UNEP và FAO dẫn dắt, kêu gọi các quốc gia và cộng đồng cùng ngăn chặn, đảo ngược suy thoái hệ sinh thái.</p><a href="https://www.unep.org/news-and-stories/press-release/recreate-re-imagine-restore-un-decade-ecosystem-restoration-kicks" target="_blank" rel="noopener noreferrer">Tìm hiểu về sáng kiến của Liên Hợp Quốc ↗</a></div></article><section class="eco-actions"><h3>Việc nhỏ giúp giảm ô nhiễm</h3><label><input type="checkbox"><span>Mang bình nước hoặc hộp cá nhân khi có thể</span></label><label><input type="checkbox"><span>Từ chối túi và đồ nhựa dùng một lần không cần thiết</span></label><label><input type="checkbox"><span>Đi bộ, đi xe đạp hoặc đi chung xe cho quãng đường phù hợp</span></label><p id="eco-action-progress">Chọn một hành động bạn muốn thực hiện hôm nay.</p></section><h3 class="environment-subheading">Ngày môi trường đáng nhớ</h3><div class="environment-days"><article><span>🌎</span><div><strong>22 tháng 4</strong><b>Ngày Quốc tế Mẹ Trái Đất</b><small>Cùng nhắc nhau sống hài hòa với thiên nhiên.</small></div></article><article><span>🐝</span><div><strong>22 tháng 5</strong><b>Ngày Quốc tế Đa dạng Sinh học</b><small>Tôn vinh và bảo vệ sự phong phú của muôn loài.</small></div></article><article><span>🌿</span><div><strong>5 tháng 6</strong><b>Ngày Môi trường Thế giới</b><small>Ngày hành động toàn cầu do UNEP dẫn dắt.</small></div></article></div><p class="environment-source">Nguồn: <a href="https://www.un.org/en/observances/earth-day/background" target="_blank" rel="noopener noreferrer">Liên Hợp Quốc</a> · <a href="https://www.unep.org/en/events/un-day/world-environment-day-2026" target="_blank" rel="noopener noreferrer">UNEP</a></p></section>`;
+    const actionChecks = [...utilityView.querySelectorAll('.eco-actions input[type="checkbox"]')];
+    actionChecks.forEach(input => input.onchange = () => {
+      const count = actionChecks.filter(check => check.checked).length;
+      utilityView.querySelector('#eco-action-progress').textContent = count ? `Bạn đã chọn ${count}/${actionChecks.length} hành động cho hôm nay.` : 'Chọn một hành động bạn muốn thực hiện hôm nay.';
+    });
+    return;
+  }
+  if (kind === 'quiz') {
+    const wasteQuiz = [
+      { item: 'Chai nhựa đã rửa sạch', bin: 'recycle', why: 'Đồ nhựa sạch, khô có thể được đưa đi tái chế ở nơi có tiếp nhận.' },
+      { item: 'Vỏ chuối', bin: 'organic', why: 'Vỏ trái cây là rác hữu cơ, có thể ủ phân nếu địa phương hỗ trợ.' },
+      { item: 'Pin đã dùng', bin: 'hazardous', why: 'Pin cần điểm thu gom riêng; không bỏ chung hoặc đốt.' },
+      { item: 'Khăn giấy dính dầu mỡ', bin: 'residual', why: 'Khăn giấy bẩn thường không phù hợp để tái chế giấy.' },
+      { item: 'Lon nhôm đã tráng sạch', bin: 'recycle', why: 'Lon kim loại sạch thường được thu gom để tái chế.' },
+      { item: 'Bã cà phê', bin: 'organic', why: 'Bã cà phê có thể ủ cùng rác hữu cơ.' },
+      { item: 'Bóng đèn compact hỏng', bin: 'hazardous', why: 'Bóng đèn cần được xử lý riêng; hãy tìm điểm thu gom phù hợp.' },
+      { item: 'Hộp xốp dính thức ăn', bin: 'residual', why: 'Hộp bẩn thường khó tái chế; làm theo hướng dẫn phân loại tại nơi bạn sống.' }
+    ];
+    const wasteBins = [['recycle', 'Tái chế ♻️'], ['organic', 'Hữu cơ 🍂'], ['hazardous', 'Nguy hại ⚠️'], ['residual', 'Còn lại 🗑️']];
+    let wasteIndex = 0, wasteScore = 0;
+    utilityView.innerHTML = `<section class="environment-page quiz-page"><div class="utility-heading"><p class="eyebrow">TRÒ CHƠI HỌC CÁCH PHÂN LOẠI</p><h2>Đố vui phân loại rác</h2><span>Chọn đúng thùng cho từng món rác và tìm hiểu cách xử lý phù hợp.</span></div><section class="waste-game" id="waste-game" aria-live="polite"></section><p class="environment-source">Đây là gợi ý phổ thông; quy định phân loại có thể khác theo địa phương. Pin và bóng đèn nên được chuyển tới điểm thu gom phù hợp.</p></section>`;
+    const wasteGame = utilityView.querySelector('#waste-game');
+    const drawWasteQuestion = () => {
+      if (wasteIndex >= wasteQuiz.length) {
+        wasteGame.innerHTML = `<div class="waste-game-head"><p class="eyebrow">THỬ THÁCH PHÂN LOẠI RÁC</p><h3>Bạn đã hoàn thành!</h3><p>Trả lời đúng ${wasteScore}/${wasteQuiz.length} câu. Mỗi món rác được phân loại đúng sẽ giúp giảm rác thải lẫn và hỗ trợ tái chế.</p></div><button type="button" class="waste-next" id="waste-restart">Làm lại thử thách</button>`;
+        wasteGame.querySelector('#waste-restart').onclick = () => { wasteIndex = 0; wasteScore = 0; drawWasteQuestion(); };
+        return;
+      }
+      const question = wasteQuiz[wasteIndex];
+      wasteGame.innerHTML = `<div class="waste-game-head"><p class="eyebrow">CÂU HỎI ${wasteIndex + 1}/${wasteQuiz.length}</p><h3>${question.item}</h3><p>Bạn sẽ bỏ món này vào thùng nào?</p></div><div class="waste-bin-options">${wasteBins.map(([key, label]) => `<button type="button" data-waste-bin="${key}">${label}</button>`).join('')}</div><p class="waste-feedback" id="waste-feedback" aria-live="polite"></p><button type="button" class="waste-next hidden" id="waste-next">Tiếp theo</button>`;
+      wasteGame.querySelectorAll('[data-waste-bin]').forEach(button => button.onclick = () => {
+        if (button.disabled) return;
+        const correct = button.dataset.wasteBin === question.bin;
+        if (correct) wasteScore++;
+        wasteGame.querySelectorAll('[data-waste-bin]').forEach(option => { option.disabled = true; if (option.dataset.wasteBin === question.bin) option.classList.add('correct'); });
+        if (!correct) button.classList.add('incorrect');
+        wasteGame.querySelector('#waste-feedback').textContent = `${correct ? 'Chính xác!' : 'Chưa đúng.'} ${question.why}`;
+        const nextButton = wasteGame.querySelector('#waste-next');
+        nextButton.classList.remove('hidden');
+        nextButton.textContent = wasteIndex === wasteQuiz.length - 1 ? 'Xem kết quả' : 'Tiếp theo';
+        nextButton.onclick = () => { wasteIndex++; drawWasteQuestion(); };
+      });
+    };
+    drawWasteQuestion();
     return;
   }
   if (kind === 'diary') {
@@ -886,6 +952,8 @@ navButtons[1].onclick = () => { const direction = bottomDirection(1); renderUtil
 navButtons[2].onclick = () => { const direction = bottomDirection(2); renderUtility('stats'); animateScreen(direction); };
 navButtons[3].onclick = () => { const direction = bottomDirection(3); renderUtility('all'); animateScreen(direction); };
 navButtons[4].onclick = () => { const direction = bottomDirection(4); renderUtility('diary'); animateScreen(direction); };
-navButtons[5].onclick = () => { const direction = bottomDirection(5); renderUtility('profile'); animateScreen(direction); };
+navButtons[5].onclick = () => { const direction = bottomDirection(5); renderUtility('environment'); animateScreen(direction); };
+navButtons[6].onclick = () => { const direction = bottomDirection(6); renderUtility('quiz'); animateScreen(direction); };
+navButtons[7].onclick = () => { const direction = bottomDirection(7); renderUtility('profile'); animateScreen(direction); };
 
 renderAll();
